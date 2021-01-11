@@ -21,6 +21,8 @@ import ctypes
 import io
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 from unrar import constants
 from unrar import unrarlib
@@ -53,6 +55,19 @@ def is_rarfile(filename):
         return False
     unrarlib.RARCloseArchive(handle)
     return (archive.OpenResult == constants.SUCCESS)
+
+
+def is_filelike(obj):
+    """Filename or file object?
+    """
+    if isinstance(obj, (bytes, str, Path)):
+        return False
+    res = True
+    for a in ("read", "tell", "seek"):
+        res = res and hasattr(obj, a)
+    if not res:
+        raise ValueError("Invalid object passed as file")
+    return True
 
 
 class RarInfo(object):
@@ -121,6 +136,12 @@ class RarFile(object):
 
     def __init__(self, filename, mode='r', pwd=None):
         """Load RAR archive file with mode read only "r"."""
+        if is_filelike(filename):
+            self.tmp_file = tempfile.NamedTemporaryFile()
+            self.tmp_file.write(filename.read())
+            filename = self.tmp_file.name
+        else:
+            self.tmp_file = None
         self.filename = filename
         mode = constants.RAR_OM_LIST_INCSPLIT
 
@@ -139,12 +160,19 @@ class RarFile(object):
             self.comment = None
         self._load_metadata(handle)
         self._close(handle)
-    
+
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
-        pass
+        if self.tmp_file is not None:
+            self.tmp_file.close()
+            self.tmp_file = None
+
+    def __del__(self):
+        if self.tmp_file is not None:
+            self.tmp_file.close()
+            self.tmp_file = None
 
     def _read_header(self, handle):
         """Read current member header into a RarInfo object."""

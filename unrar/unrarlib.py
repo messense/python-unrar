@@ -31,6 +31,7 @@ __all__ = ["RAROpenArchiveDataEx", "RARHeaderDataEx", "RAROpenArchiveEx",
            "dostime_to_timetuple"]
 
 
+CURR_PATH = os.path.abspath(os.path.dirname(__file__))
 lib_path = os.environ.get('UNRAR_LIB_PATH', None)
 
 # find and load unrar library
@@ -41,18 +42,28 @@ if platform.system() == 'Windows':
     UNRARCALLBACK = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint,
                                        ctypes.c_long, ctypes.c_long,
                                        ctypes.c_long)
+    bundled_path = os.path.join(CURR_PATH, 'libunrar.dll')
     lib_path = lib_path or find_library("unrar.dll")
     if lib_path:
         unrarlib = ctypes.WinDLL(lib_path)
+    elif os.path.exists(bundled_path):
+        unrarlib = ctypes.WinDLL(bundled_path)
 else:
     # assume unix
     HANDLE = ctypes.c_void_p
     UNRARCALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_uint,
                                      ctypes.c_long, ctypes.c_long,
                                      ctypes.c_long)
+    if platform.system() == "Darwin":
+        bundled_path = os.path.join(CURR_PATH, 'libunrar.dylib')
+    else:
+        bundled_path = os.path.join(CURR_PATH, 'libunrar.so')
+
     lib_path = lib_path or find_library("unrar")
     if lib_path:
         unrarlib = ctypes.cdll.LoadLibrary(lib_path)
+    elif os.path.exists(bundled_path):
+        unrarlib = ctypes.cdll.LoadLibrary(bundled_path)
     elif platform.system() == "Darwin":
         # maybe this is MacOS, check if library is installed by Homebrew.
         # expected installed dir and lib filename
